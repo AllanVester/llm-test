@@ -2,7 +2,7 @@ name: Test llama.cpp
 
 on:
   workflow_dispatch:
-
+  
 jobs:
   changelog:
     runs-on: ubuntu-latest
@@ -12,49 +12,50 @@ jobs:
       LLAMA_VERSION: b8808
     steps:
     - uses: actions/checkout@v7
+    
     - uses: actions/setup-node@v7
       with: { node-version: 24 }
-
+      
     - name: Cache llama.cpp
       id: cache-llama
       uses: actions/cache@v6
       with:
         path: ~/llama
         key: llama-${{ env.LLAMA_VERSION }}-linux-x64
-
+        
     - name: Download llama.cpp
       run: |
         mkdir -p ~/llama
         curl -fSL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_VERSION}/llama-${LLAMA_VERSION}-bin-ubuntu-x64.tar.gz" | tar -xz -C ~/llama --strip-components=1
-
+    
     - name: Cache the model
       id: cache-model
       uses: actions/cache@v6
       with:
         path: ~/models
         key: model-${{ env.MODEL_FILE }}
-  
+
     - name: Download the model
       if: steps.cache-model.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/models
         curl -fSL "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}" -o ~/models/${MODEL_FILE}
-
+    
     - name: Fetch website content
       run: |
-        # Install beautifulsoup to extract text from HTML cleanly
         pip install requests beautifulsoup4
-        
-        # Download the webpage and extract just the text into a file called context.txt
-        python -c "
+
+        # Pull clean article content from Fandom's MediaWiki API instead of
+        # scraping the rendered HTML page, which Cloudflare serves as a
+        # JS-challenge page to non-browser clients. A browser User-Agent and
+        # explicit error checks make sure a block page never silently becomes
+        # the model's context.
+        cat << 'PYEOF' > fetch.py
         import requests
         from bs4 import BeautifulSoup
-        
+
         API = "https://hitman.fandom.com/api.php"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"}
         params = {
             "action": "parse",
             "page": "Elusive_Targets",
@@ -63,40 +64,48 @@ jobs:
             "formatversion": "2",
             "redirects": "1",
         }
-        
+
         resp = requests.get(API, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
             raise SystemExit(f"MediaWiki API error: {data['error']}")
-        
+
         html = data["parse"]["text"]
         text = BeautifulSoup(html, "html.parser").get_text(separator=" ", strip=True)
-        
-        # Fail loudly instead of silently feeding a block page to the model
+
+        # Fail loudly instead of feeding a block page / empty page to the model.
         if len(text) < 500 or "enable JavaScript" in text:
             raise SystemExit("Page content looks blocked or empty; aborting.")
-        
+
         with open("context.txt", "w", encoding="utf-8") as f:
             f.write(text)
-        "
 
+        print(f"Wrote {len(text)} characters to context.txt")
+        PYEOF
+
+        python fetch.py
+    
     - name: Ask the AI
       run: |
         cat << 'EOF' > prompt.txt
         Here is the scraped text from the Hitman Elusive Targets wiki page:
-        
+
         EOF
-        
+
         cat context.txt >> prompt.txt
-        
+
         cat << 'EOF' >> prompt.txt
-        
+
         Based on the provided text, what Elusive targets are currently active? If none are active, please say so. Do not output anything else.
         EOF
-        
+
         chmod +x ~/llama/llama-cli
-        
+
+        # Run in conversation mode (dropped --no-conversation) so the prompt is
+        # wrapped in the model's chat template and the model emits its
+        # end-of-turn token. --jinja uses the template baked into the GGUF, -st
+        # exits after the single turn, and -n caps output as a hard safety net.
         ~/llama/llama-cli \
           -m ~/models/${MODEL_FILE} \
           -f prompt.txt \
