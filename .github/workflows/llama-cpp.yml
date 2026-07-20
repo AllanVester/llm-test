@@ -42,19 +42,29 @@ jobs:
 
     - name: Fetch website content
       run: |
-        # Install beautifulsoup to extract text from HTML cleanly
         pip install requests beautifulsoup4
         
-        # Download the webpage and extract just the text into a file called context.txt
         python -c "
         import requests
         from bs4 import BeautifulSoup
         
-        url = 'https://hitman.fandom.com/wiki/Elusive_Targets'
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Use the MediaWiki API instead of the raw webpage to bypass Cloudflare
+        url = 'https://hitman.fandom.com/api.php'
+        params = {
+            'action': 'parse',
+            'page': 'Elusive_Targets',
+            'format': 'json',
+            'prop': 'text'
+        }
         
-        # Get text, strip extra whitespace
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, params=params, headers=headers)
+        data = response.json()
+        
+        # The API returns the raw HTML inside the JSON response
+        html_content = data['parse']['text']['*']
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
         text = soup.get_text(separator=' ', strip=True)
         
         with open('context.txt', 'w', encoding='utf-8') as f:
@@ -63,8 +73,6 @@ jobs:
 
     - name: Ask the AI
       run: |
-        # Construct the prompt containing your question and the scraped context
-        # We use a file to avoid command line length limits
         cat << 'EOF' > prompt.txt
         Here is the scraped text from the Hitman Elusive Targets wiki page:
         
@@ -77,9 +85,10 @@ jobs:
         Based on the provided text, what Elusive targets are currently active? If none are active, please say so. Do not output anything else.
         EOF
         
-        # Make the downloaded llama-cli binary executable
         chmod +x ~/llama/llama-cli
         
-        # Run llama-cli (adjust the context size -c based on how much text the wiki page has)
-        # Using 8192 context size to ensure the whole wiki page fits
-        ~/llama/llama-cli -m ~/models/${MODEL_FILE} -f prompt.txt -c 131072
+        ~/llama/llama-cli \
+          -m ~/models/${MODEL_FILE} \
+          -f prompt.txt \
+          -c 131072 \
+          --no-conversation < /dev/null
