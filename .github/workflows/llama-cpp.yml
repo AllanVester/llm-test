@@ -176,6 +176,8 @@ jobs:
 
         cat << 'EOF' >> prompt.txt
 
+        EOF
+
         chmod +x ~/llama/llama-cli
 
         # Run in conversation mode (dropped --no-conversation) so the prompt is
