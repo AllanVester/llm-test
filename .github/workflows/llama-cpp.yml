@@ -166,19 +166,15 @@ jobs:
     
     - name: Ask the AI
       run: |
-        cat << 'EOF' > prompt.txt
+        cat << EOF > prompt.txt
         Today's date is: $(date '+%B %d, %Y').
         Based on the provided text, what Elusive targets are currently active? If none are active, please say so. Do not output anything else.
         Here is the scraped text from the Hitman Elusive Targets wiki page:
-
+        
         EOF
-
+        
         cat context.txt >> prompt.txt
-
-        cat << 'EOF' >> prompt.txt
-
-        EOF
-
+        
         chmod +x ~/llama/llama-cli
 
         # Run in conversation mode (dropped --no-conversation) so the prompt is
