@@ -14,13 +14,28 @@ jobs:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
       with: { node-version: 24 }
-  
+
+    - name: Cache llama.cpp
+      id: cache-llama
+      uses: actions/cache@v6
+      with:
+        path: ~/llama
+        key: llama-${{ env.LLAMA_VERSION }}-linux-x64
+
     - name: Download llama.cpp
       run: |
         mkdir -p ~/llama
         curl -fSL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_VERSION}/llama-${LLAMA_VERSION}-bin-ubuntu-x64.tar.gz" | tar -xz -C ~/llama
   
+    - name: Cache the model
+      id: cache-model
+      uses: actions/cache@v6
+      with:
+        path: ~/models
+        key: model-${{ env.MODEL_FILE }}
+  
     - name: Download the model
+      if: steps.cache-model.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/models
         curl -fSL "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}" -o ~/models/${MODEL_FILE}
