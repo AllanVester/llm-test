@@ -187,5 +187,4 @@ jobs:
           -c 131072 \
           --jinja \
           -st \
-          -n 512 \
           < /dev/null
