@@ -7,8 +7,8 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     env:
-      MODEL_REPO: unsloth/gemma-4-E4B-it-GGUF
-      MODEL_FILE: gemma-4-E4B-it-UD-Q8_K_XL.gguf
+      MODEL_REPO: unsloth/Qwen3.5-9B-GGUF
+      MODEL_FILE: Qwen3.5-9B-Q8_0.gguf
       LLAMA_VERSION: b8808
     steps:
     - uses: actions/checkout@v7
